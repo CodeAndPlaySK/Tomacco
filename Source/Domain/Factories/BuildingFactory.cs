@@ -1,22 +1,20 @@
-﻿using Tomacco.Source.Entities;
+﻿using Domain.Models;
 
-namespace Domain.Entities.Factories
+namespace Domain.Factories
 {
     public interface IBuildingFactory
     {
-        IBuilding CreateBuilding(IBuildingTemplate buildingTemplate, int id, IFamily familyOwner, ISlotCityBuilding slotBuilding);
+        Building CreateBuilding(BuildingTemplate buildingTemplate, int id, Family familyOwner, SlotBuilding slotBuilding);
     }
 
     public class BuildingFactory : IBuildingFactory
     {
-        public IBuilding CreateBuilding(IBuildingTemplate buildingTemplate, int id, IFamily familyOwner, ISlotCityBuilding slotBuilding)
+        public Building CreateBuilding(BuildingTemplate buildingTemplate, int id, Family familyOwner, SlotBuilding slotBuilding)
         {
             return new Building
             {
                 Id = id,
-                Owner = familyOwner,
-                SlotActions = [],
-                SlotCity = slotBuilding,
+                FamilyOwner = familyOwner,
                 Template = buildingTemplate
             };
         }

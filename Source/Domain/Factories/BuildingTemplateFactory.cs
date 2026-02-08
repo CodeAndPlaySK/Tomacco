@@ -1,130 +1,119 @@
-﻿using Tomacco.Source.Entities;
+﻿using Domain.Enums;
+using Domain.Models;
 
-namespace Domain.Entities.Factories
+namespace Domain.Factories
 {
-    public interface IBuildingTemplateFactory
+    public class BuildingTemplateFactory
     {
-        IBuildingTemplate CreateBuildingTemplate(IBuildingKind kind, int id);
-    }
-    public class BuildingTemplateFactory : IBuildingTemplateFactory
-    {
-        private readonly IMineBuildingTemplateFactory _mineBuildingFactory;
-        private readonly IChurchBuildingTemplateFactory _churchBuildingFactory;
-        private readonly IInnBuildingTemplateFactory _innBuildingFactory;
-
-
-        public BuildingTemplateFactory(IMineBuildingTemplateFactory mineBuildingFactory, IChurchBuildingTemplateFactory churchBuildingFactory, IInnBuildingTemplateFactory innBuildingFactory)
-        {
-            _mineBuildingFactory = mineBuildingFactory;
-            _churchBuildingFactory = churchBuildingFactory;
-            _innBuildingFactory = innBuildingFactory;
-        }
-
-        public IBuildingTemplate CreateBuildingTemplate(IBuildingKind kind, int id)
-        {
-            if (kind.GetType().IsAssignableTo(typeof(IBuildingMineKind)))
-            {
-                return _mineBuildingFactory.CreateBuildingTemplate(id);
-            }
-            if (kind.GetType().IsAssignableTo(typeof(IBuildingChurchKind)))
-            {
-                return _churchBuildingFactory.CreateBuildingTemplate(id);
-            }
-            if (kind.GetType().IsAssignableTo(typeof(IBuildingInnKind)))
-            {
-                return _innBuildingFactory.CreateBuildingTemplate(id);
-            }
-
-            throw new NotSupportedException($"Building kind '{kind.Name}' unsupported");
-        }
-    }
-
-    public interface ICommonBuildingTemplateFactory
-    {
-        IBuildingKind Kind { get; init; }
-
-        IBuildingTemplate CreateBuildingTemplate(int id);
-    }
-    public abstract class CommonBuildingTemplateFactory : ICommonBuildingTemplateFactory
-    {
-        public IBuildingKind Kind { get; init; }
-        public CommonBuildingTemplateFactory(IBuildingKind kind)
-        {
-            Kind = kind;
-        }
-        public abstract IBuildingTemplate CreateBuildingTemplate(int id);
-    }
-
-    public interface IMineBuildingTemplateFactory : ICommonBuildingTemplateFactory;
-
-    public class MineBuildingTemplateFactory : CommonBuildingTemplateFactory, IMineBuildingTemplateFactory
-    {
-        public MineBuildingTemplateFactory(IBuildingMineKind kind) : base(kind)
-        {
-        }
-
-        public override IBuildingTemplate CreateBuildingTemplate(int id)
+        public BuildingTemplate CreateMine()
         {
             return new BuildingTemplate
             {
-                Actions = [
-                    new BuildingAction
-                    {
-                        Events = [ 
-                            new ResourceFamilyManagingHeroEventStrategy {
-                                Name = "Hero Mining",
-                                Resource = FamilyResourceEnum.Gold,
-                                Amount = hero => hero.Stats.Physic * 10
-                        }]
-                    }
-                ],
-                Cost = 50,
-                Kind = Kind,
-                PassiveEvents = [new FamilyResourceManagingEventStrategy
+                Name = "Mine",
+                KindType = BuildingKindType.Mine,
+                CostructionCost = 50,
+                TurnsToComplete = 2,
+                ActionTemplates = new List<BuildingActionTemplate>
                 {
-                    Name = "Mining",
-                    Resource = FamilyResourceEnum.Gold,
-                    ResourceAmount = () => 5
-                }]
+                    // Azione passiva: guadagna 5 oro ogni turno
+                    new BuildingActionTemplate
+                    {
+                        Name = "Gold Production",
+                        Description = "Produces gold each turn",
+                        ActionType = ActionType.Passive,
+                        Effects = new List<ActionEffect>
+                        {
+                            new ActionEffect
+                            {
+                                EffectType = EffectType.GainGold,
+                                TargetType = EffectTargetType.Self,
+                                FixedValue = 5,
+                                Order = 1
+                            }
+                        }
+                    },
+                    // Azione attiva: estrai cristalli (10 oro)
+                    new BuildingActionTemplate
+                    {
+                        Name = "Extract Crystals",
+                        Description = "Assign a hero to extract valuable crystals",
+                        ActionType = ActionType.Active,
+                        MaxHeroSlots = 1,
+                        Effects = new List<ActionEffect>
+                        {
+                            new ActionEffect
+                            {
+                                EffectType = EffectType.GainGold,
+                                TargetType = EffectTargetType.Self,
+                                FixedValue = 10,
+                                Order = 1
+                            }
+                        }
+                    }
+                }
             };
         }
-    }
 
-    public interface IChurchBuildingTemplateFactory : ICommonBuildingTemplateFactory;
-
-    public class ChurchBuildingTemplateFactory : CommonBuildingTemplateFactory, IChurchBuildingTemplateFactory
-    {
-        public ChurchBuildingTemplateFactory(IBuildingChurchKind kind) : base(kind)
-        {
-        }
-
-        public override IBuildingTemplate CreateBuildingTemplate(int id)
+        public BuildingTemplate CreateChurch()
         {
             return new BuildingTemplate
             {
-                Actions = [],
-                Cost = 50,
-                Kind = Kind
+                Name = "Church",
+                KindType = BuildingKindType.Church,
+                CostructionCost = 80,
+                TurnsToComplete = 3,
+                ActionTemplates = new List<BuildingActionTemplate>
+                {
+                    // Azione passiva con condizione
+                    new BuildingActionTemplate
+                    {
+                        Name = "Divine Blessing",
+                        Description = "Gain influence if you have a Cleric hero",
+                        ActionType = ActionType.Passive,
+                        Conditions = new List<ActionCondition>
+                        {
+                            new ActionCondition
+                            {
+                                ConditionType = ConditionType.HasHeroOfClass,
+                                RequiredHeroClass = HeroClassType.Cleric,
+                                RequiredAmount = 1
+                            }
+                        },
+                        Effects = new List<ActionEffect>
+                        {
+                            new ActionEffect
+                            {
+                                EffectType = EffectType.GainInfluence,
+                                TargetType = EffectTargetType.Self,
+                                FixedValue = 4,
+                                Order = 1
+                            }
+                        }
+                    },
+                    // Azione attiva: cura eroe
+                    new BuildingActionTemplate
+                    {
+                        Name = "Healing Prayer",
+                        Description = "Heal an assigned hero",
+                        ActionType = ActionType.Active,
+                        MaxHeroSlots = 1,
+                        Effects = new List<ActionEffect>
+                        {
+                            new ActionEffect
+                            {
+                                EffectType = EffectType.HealHero,
+                                TargetType = EffectTargetType.Self,
+                                MinValue = 5,
+                                MaxValue = 10,
+                                StatAffected = HeroStatsEnumeration.LifePoints,
+                                Order = 1
+                            }
+                        }
+                    }
+                }
             };
         }
-    }
 
-    public interface IInnBuildingTemplateFactory : ICommonBuildingTemplateFactory;
-
-    public class InnBuildingTemplateFactory : CommonBuildingTemplateFactory, IInnBuildingTemplateFactory
-    {
-        public InnBuildingTemplateFactory(IBuildingInnKind kind) : base(kind)
-        {
-        }
-
-        public override IBuildingTemplate CreateBuildingTemplate(int id)
-        {
-            return new BuildingTemplate
-            {
-                Actions = [],
-                Cost = 50,
-                Kind = Kind
-            };
-        }
+        // Aggiungi altri template...
     }
 }

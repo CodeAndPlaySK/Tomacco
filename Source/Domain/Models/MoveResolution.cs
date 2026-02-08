@@ -1,57 +1,57 @@
-﻿using Tomacco.Source.Entities;
-
-namespace Tomacco.Source.Models
+﻿namespace Domain.Models
 {
     public interface IMoveResolution
     {
-        IHero Sender { get; set; }
-        List<IHero> Receivers { get; set; }
-        List<IMoveEffectResolution> Effects { get; set; }
+        Hero Sender { get; }
+        IList<Hero> Receivers { get; }
+        IList<IMoveEffectResolution> Effects { get; }
+        bool IsHit { get; }
     }
 
     public class MoveResolution : IMoveResolution
     {
-        public IHero Sender { get; set; }
-        public List<IHero> Receivers { get; set; }
-        public List<IMoveEffectResolution> Effects { get; set; }
+        public Hero Sender { get; set; } = null!;
+        public IList<Hero> Receivers { get; set; } = new List<Hero>();
+        public IList<IMoveEffectResolution> Effects { get; set; } = new List<IMoveEffectResolution>();
+        public bool IsHit { get; set; } = true;
     }
 
-    public interface IMoveEffectResolution;
-
-    public interface IDamageMoveEffectResolution : IMoveEffectResolution
+    // Interfaccia base per gli effetti
+    public interface IMoveEffectResolution
     {
-        int Damage { get; set; }
+        MoveStrategyType EffectType { get; }
     }
 
-    public class DamageMoveEffectResolution : IDamageMoveEffectResolution
+    // Effetto danno
+    public class DamageMoveEffectResolution : IMoveEffectResolution
     {
+        public MoveStrategyType EffectType => MoveStrategyType.Attack;
         public int Damage { get; set; }
     }
 
-    public interface IHealMoveEffectResolution : IMoveEffectResolution
+    // Effetto buff
+    public class BuffMoveEffectResolution : IMoveEffectResolution
     {
-        public int Heal { get; set; }
-        public HeroStatsEnumeration StatToHeal { get; set; }
-
-    }
-
-    public class HealMoveEffectResolution : IHealMoveEffectResolution
-    {
-        public int Heal { get; set; }
-        public HeroStatsEnumeration StatToHeal { get; set; }
-    }
-
-    public interface IBuffMoveEffectResolution : IMoveEffectResolution
-    {
-        int BuffValue { get; set; }
-        HeroStatsEnumeration StatBuffed { get; set; }
-        int NumberRounds { get; set; }
-    }
-
-    public class BuffMoveEffectResolution : IBuffMoveEffectResolution
-    {
+        public MoveStrategyType EffectType => MoveStrategyType.Buff;
         public int BuffValue { get; set; }
         public HeroStatsEnumeration StatBuffed { get; set; }
         public int NumberRounds { get; set; }
+    }
+
+    // Effetto heal
+    public class HealMoveEffectResolution : IMoveEffectResolution
+    {
+        public MoveStrategyType EffectType => MoveStrategyType.Heal;
+        public int HealAmount { get; set; }
+        public HeroStatsEnumeration StatToHeal { get; set; }
+    }
+
+    // Risultato miss
+    public class MissMoveResolution : IMoveResolution
+    {
+        public Hero Sender { get; set; } = null!;
+        public IList<Hero> Receivers { get; set; } = new List<Hero>();
+        public IList<IMoveEffectResolution> Effects { get; set; } = new List<IMoveEffectResolution>();
+        public bool IsHit => false;
     }
 }

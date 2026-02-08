@@ -1,85 +1,217 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using Tomacco.Source.Entities;
-using Tomacco.Source.Models;
+using Domain.Models;
 
-namespace Application.Services
+namespace Domain.Services
 {
-    public interface IMoveResolveService;
-
-    public class MoveResolverService : IMoveResolveService
+    public interface IMoveResolverService
     {
-        public MoveResolverService() { }
+        List<IMoveResolution> UseMove(Hero user, IList<Hero> targets, Move move);
+        MoveResolution UseMoveOnSingleTarget(Hero user, Hero target, Move move);
+    }
 
-        public List<IMoveResolution> UseMove(IHero user, IList<IHero> targets, IMove move)
+    public class MoveResolverService : IMoveResolverService
+    {
+        private readonly Random _random = new();
+
+        public List<IMoveResolution> UseMove(Hero user, IList<Hero> targets, Move move)
         {
-            if (user == null) throw new ArgumentNullException(nameof(user));
-            if (targets == null) throw new ArgumentNullException(nameof(targets));
-            if (move == null) throw new ArgumentNullException(nameof(move));
+            ArgumentNullException.ThrowIfNull(user);
+            ArgumentNullException.ThrowIfNull(targets);
+            ArgumentNullException.ThrowIfNull(move);
 
-            var result = new List<IMoveResolution>();
-
-            if (move is ISimpleMove simpleMove)
+            return move.MoveType switch
             {
-                if (targets.Count > simpleMove.NumberTargets) throw new ArgumentException("Too much targets");
-                
-                foreach (var target in targets)
+                MoveType.Simple => ResolveSimpleMove(user, targets, move),
+                MoveType.Area => ResolveAreaMove(user, targets, move),
+                MoveType.Self => ResolveSelfMove(user, move),
+                _ => throw new ArgumentException($"Move type '{move.MoveType}' not supported")
+            };
+        }
+
+        public MoveResolution UseMoveOnSingleTarget(Hero user, Hero target, Move move)
+        {
+            var results = UseMove(user, new List<Hero> { target }, move);
+            return results.FirstOrDefault() as MoveResolution ?? new MoveResolution
+            {
+                Sender = user,
+                Receivers = new List<Hero> { target },
+                IsHit = false
+            };
+        }
+
+        #region Move Type Resolvers
+
+        private List<IMoveResolution> ResolveSimpleMove(Hero user, IList<Hero> targets, Move move)
+        {
+            var maxTargets = move.NumberTargets ?? 1;
+
+            if (targets.Count > maxTargets)
+            {
+                throw new ArgumentException(
+                    $"Too many targets. Max: {maxTargets}, Provided: {targets.Count}",
+                    nameof(targets));
+            }
+
+            var results = new List<IMoveResolution>();
+
+            foreach (var target in targets)
+            {
+                var isHit = IsAttackHit(user.Stats, target.Stats, move.StatToHit);
+
+                if (isHit)
                 {
-                    if (_IsAttackHit(user.Stats, target.Stats, simpleMove.StatToHit))
+                    var resolution = CreateResolutionForTarget(user, target, move);
+                    results.Add(resolution);
+                }
+                else
+                {
+                    results.Add(new MissMoveResolution
                     {
-                        foreach (var moveStrategy in simpleMove.Strategies)
-                        {
-                            if (moveStrategy is IAttackTypeStrategy attackStrategy)
-                            {
-                                result.Add(new MoveResolution { Effects = [new DamageMoveEffectResolution { Damage = attackStrategy.Damage() }], Receivers = [target], Sender = user });
-                                continue;
-                            }
-
-                            if (moveStrategy is IBuffTypeStrategy buffStrategy)
-                            {
-                                result.Add(new MoveResolution{Effects = [new BuffMoveEffectResolution{BuffValue = buffStrategy.Value(), StatBuffed = buffStrategy.StatToBuff, NumberRounds = buffStrategy.NumberRounds}] });
-                            }
-
-                            if (moveStrategy is IHealTypeStrategy healTypeStrategy)
-                            {
-                                result.Add(new MoveResolution { Effects = [new HealMoveEffectResolution{Heal = healTypeStrategy.Value(), StatToHeal = healTypeStrategy.StatToHeal}] });
-                            }
-                        }
-                    }
+                        Sender = user,
+                        Receivers = new List<Hero> { target }
+                    });
                 }
             }
 
-            return result;
+            return results;
         }
 
-        private bool _IsAttackHit(IHeroStats attackStatsHero, IHeroStats defenceStatsHero, HeroStatsEnumeration? statToHit)
+        private List<IMoveResolution> ResolveAreaMove(Hero user, IList<Hero> targets, Move move)
         {
-            if (attackStatsHero == null) throw new ArgumentNullException(nameof(attackStatsHero));
-            if (defenceStatsHero == null) throw new ArgumentNullException(nameof(defenceStatsHero));
+            var results = new List<IMoveResolution>();
 
-            if (statToHit == null) return true;
-
-            var probabilityToHit = _GetProbabilityToHit(attackStatsHero, defenceStatsHero, statToHit);
-            var rdmValue = new Random().Next(100) + 1;
-            return rdmValue < probabilityToHit;
-        }
-
-        private int _GetProbabilityToHit(IHeroStats attackStatsHero, IHeroStats defenceStatsHero, [DisallowNull] HeroStatsEnumeration? mainStat)
-        {
-            var attackAmount = _GetAttackAmount(attackStatsHero, mainStat);
-            var defenceAmount = _GetDefenceAmount(defenceStatsHero);
-            var ratioHit = attackAmount / (attackAmount + defenceAmount) * 100;
-            return ratioHit;
-        }
-
-        private int _GetDefenceAmount(IHeroStats defenceStatsHero) => defenceStatsHero.Defence;
-
-        private int _GetAttackAmount(IHeroStats attackStatsHero, HeroStatsEnumeration? mainStat) =>
-            mainStat switch
+            // Area move colpisce tutti, niente check hit per target
+            var resolution = new MoveResolution
             {
-                HeroStatsEnumeration.Physic => attackStatsHero.Physic,
-                HeroStatsEnumeration.Mind => attackStatsHero.Mind,
-                HeroStatsEnumeration.Faith => attackStatsHero.Faith,
-                _ => throw new ArgumentException("Stat not supported for hit move")
+                Sender = user,
+                Receivers = targets.ToList(),
+                IsHit = true,
+                Effects = new List<IMoveEffectResolution>()
             };
+
+            foreach (var strategy in move.Strategies.OrderBy(s => s.Order))
+            {
+                var effect = CreateEffectFromStrategy(strategy);
+                if (effect != null)
+                {
+                    resolution.Effects.Add(effect);
+                }
+            }
+
+            results.Add(resolution);
+            return results;
+        }
+
+        private List<IMoveResolution> ResolveSelfMove(Hero user, Move move)
+        {
+            var resolution = CreateResolutionForTarget(user, user, move);
+            return new List<IMoveResolution> { resolution };
+        }
+
+        #endregion
+
+        #region Resolution Creation
+
+        private MoveResolution CreateResolutionForTarget(Hero user, Hero target, Move move)
+        {
+            var resolution = new MoveResolution
+            {
+                Sender = user,
+                Receivers = new List<Hero> { target },
+                IsHit = true,
+                Effects = new List<IMoveEffectResolution>()
+            };
+
+            foreach (var strategy in move.Strategies.OrderBy(s => s.Order))
+            {
+                var effect = CreateEffectFromStrategy(strategy);
+                if (effect != null)
+                {
+                    resolution.Effects.Add(effect);
+                }
+            }
+
+            return resolution;
+        }
+
+        private IMoveEffectResolution? CreateEffectFromStrategy(MoveTypeStrategy strategy)
+        {
+            return strategy.StrategyType switch
+            {
+                MoveStrategyType.Attack => new DamageMoveEffectResolution
+                {
+                    Damage = strategy.GetValue()
+                },
+
+                MoveStrategyType.Buff => new BuffMoveEffectResolution
+                {
+                    BuffValue = strategy.GetValue(),
+                    StatBuffed = strategy.StatToBuff
+                        ?? throw new InvalidOperationException("Buff strategy must have StatToBuff"),
+                    NumberRounds = strategy.NumberRounds
+                        ?? throw new InvalidOperationException("Buff strategy must have NumberRounds")
+                },
+
+                MoveStrategyType.Heal => new HealMoveEffectResolution
+                {
+                    HealAmount = strategy.GetValue(),
+                    StatToHeal = strategy.StatToHeal
+                        ?? throw new InvalidOperationException("Heal strategy must have StatToHeal")
+                },
+
+                _ => null
+            };
+        }
+
+        #endregion
+
+        #region Hit Calculation
+
+        private bool IsAttackHit(HeroStats attackerStats, HeroStats defenderStats, HeroStatsEnumeration? statToHit)
+        {
+            ArgumentNullException.ThrowIfNull(attackerStats);
+            ArgumentNullException.ThrowIfNull(defenderStats);
+
+            // Se non c'è stat to hit, colpisce sempre
+            if (statToHit == null)
+                return true;
+
+            var hitProbability = CalculateHitProbability(attackerStats, defenderStats, statToHit.Value);
+            var roll = _random.Next(1, 101); // 1-100
+
+            return roll <= hitProbability;
+        }
+
+        private int CalculateHitProbability(HeroStats attackerStats, HeroStats defenderStats, HeroStatsEnumeration mainStat)
+        {
+            var attackValue = GetStatValue(attackerStats, mainStat);
+            var defenceValue = defenderStats.Defence;
+
+            // Evita divisione per zero
+            var total = attackValue + defenceValue;
+            if (total <= 0)
+                return 50; // Default 50% se entrambi sono 0
+
+            // Calcola con decimali poi converti
+            var probability = (double)attackValue / total * 100;
+
+            // Clamp tra 5% e 95%
+            return Math.Clamp((int)probability, 5, 95);
+        }
+
+        private int GetStatValue(HeroStats stats, HeroStatsEnumeration stat)
+        {
+            return stat switch
+            {
+                HeroStatsEnumeration.Physic => stats.Physic,
+                HeroStatsEnumeration.Mind => stats.Mind,
+                HeroStatsEnumeration.Faith => stats.Faith,
+                HeroStatsEnumeration.Speed => stats.Speed,
+                HeroStatsEnumeration.Charisma => stats.Charisma,
+                _ => throw new ArgumentException($"Stat '{stat}' not supported for hit calculation", nameof(stat))
+            };
+        }
+
+        #endregion
     }
 }

@@ -1,14 +1,14 @@
-﻿using Domain.Entities;
+﻿using Domain.Models;
 
 namespace Domain.Factories
 {
     public interface IPlayerFactory
     {
-        IPlayer Build(string username, string telegramId);
+        Player Build(string username, string telegramId);
     }
     public class PlayerFactory : IPlayerFactory
     {
-        public IPlayer Build(string username, string telegramId)
+        public Player Build(string username, string telegramId)
         {
             return new Player
             {

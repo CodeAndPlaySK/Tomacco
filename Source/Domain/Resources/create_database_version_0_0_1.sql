@@ -39,15 +39,15 @@ CREATE TABLE FamiliesOfPlayers (
 --------------------------------------------------
 CREATE TABLE hero (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    Families_id INTEGER NOT NULL,
+    families_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     strength INTEGER NOT NULL DEFAULT 0,
     mind INTEGER NOT NULL DEFAULT 0,
     faith INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (Families_id) REFERENCES Families(id)
+    FOREIGN KEY (families_id) REFERENCES Families(id)
 );
 
-CREATE INDEX idx_hero_Families ON hero(Families_id);
+CREATE INDEX idx_hero_families ON hero(families_id);
 
 --------------------------------------------------
 -- BUILDING

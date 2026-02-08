@@ -1,105 +1,59 @@
-﻿using Tomacco.Source.Entities;
-using Tomacco.Source.Models;
+﻿using Domain.Enums;
+using Domain.Models;
 
-namespace Domain.Entities.Factories
+namespace Domain.Factories
 {
     public interface IHeroFactory
     {
-        IHero CreateHeroFirstLevel(IHeroClass heroClass, int id, string name, IFamily family);
+        Hero CreateHeroFirstLevel(HeroClassType heroClassType, int id, string name, Family family);
     }
 
     public class HeroFactory : IHeroFactory
     {
-        private readonly IWarriorHeroFactory _warriorHeroFactory;
-        private readonly IWizardHeroFactory _wizardHeroFactory;
-        private readonly IClericHeroFactory _clericHeroFactory;
-        private readonly IScoundrelHeroFactory _scoundrelHeroFactory;
-        private readonly IGuardianHeroFactory _guardianHeroFactory;
+        private readonly Dictionary<HeroClassType, Func<HeroStats>> _statsGenerators;
+        private readonly IMoveStrategyFactory _moveStrategyFactory;
 
-        public HeroFactory(IWarriorHeroFactory warriorHeroFactory, IWizardHeroFactory wizardHeroFactory, IClericHeroFactory clericHeroFactory, IScoundrelHeroFactory scoundrelHeroFactory, IGuardianHeroFactory guardianHeroFactory)
+        public HeroFactory(IMoveStrategyFactory moveStrategyFactory)
         {
-            _warriorHeroFactory = warriorHeroFactory;
-            _wizardHeroFactory = wizardHeroFactory;
-            _clericHeroFactory = clericHeroFactory;
-            _scoundrelHeroFactory = scoundrelHeroFactory;
-            _guardianHeroFactory = guardianHeroFactory;
+            _moveStrategyFactory = moveStrategyFactory ?? throw new ArgumentNullException(nameof(moveStrategyFactory));
+            _statsGenerators = new Dictionary<HeroClassType, Func<HeroStats>>
+            {
+                { HeroClassType.Warrior, _GenerateWarriorStats },
+                { HeroClassType.Wizard, _GenerateWizardStats },
+                { HeroClassType.Cleric, _GenerateClericStats },
+                { HeroClassType.Scoundrel, _GenerateScoundrelStats },
+                { HeroClassType.Guardian, _GenerateGuardianStats }
+            };
         }
-
-        public IHero CreateHeroFirstLevel(IHeroClass heroClass, int id, string name, IFamily family)
+        
+        public Hero CreateHeroFirstLevel(HeroClassType heroClassType, int id, string name, Family family)
         {
-            if (heroClass.GetType().IsAssignableTo(typeof(IWarriorHeroClass)))
+            if (!_statsGenerators.TryGetValue(heroClassType, out var statsGenerator))
             {
-                return _warriorHeroFactory.CreateHeroFirstLevel(id, name, family);
+                throw new NotSupportedException($"Hero Class '{heroClassType}' is not supported");
             }
 
-            if (heroClass.GetType().IsAssignableTo(typeof(IWizardHeroClass)))
-            {
-                return _wizardHeroFactory.CreateHeroFirstLevel(id, name, family);
-            }
-
-            if (heroClass.GetType().IsAssignableTo(typeof(IClericHeroClass)))
-            {
-                return _clericHeroFactory.CreateHeroFirstLevel(id, name, family);
-            }
-
-            if (heroClass.GetType().IsAssignableTo(typeof(IScoundrelHeroClass)))
-            {
-                return _scoundrelHeroFactory.CreateHeroFirstLevel(id, name, family);
-            }
-
-            if (heroClass.GetType().IsAssignableTo(typeof(IGuardianHeroClass)))
-            {
-                return _guardianHeroFactory.CreateHeroFirstLevel(id, name, family);
-            }
-
-            throw new NotSupportedException($"Hero Class '{heroClass.Name}' unsupported");
-        }
-    }
-
-    public interface ICommonHeroFactory
-    {
-        IHero CreateHeroFirstLevel(int id, string name, IFamily family);
-    }
-
-    public abstract class CommonHeroFactory : ICommonHeroFactory
-    {
-        protected readonly IHeroClass heroClass;
-        public CommonHeroFactory(IHeroClass heroClass)
-        {
-            this.heroClass = heroClass;
-        }
-
-        public IHero CreateHeroFirstLevel(int id, string name, IFamily family) =>
-            new Hero
+            return new Hero
             {
                 Id = id,
                 Name = name,
                 Family = family,
-                Class = heroClass,
-                Stats = CreateHeroStatsForFirstLevel(),
-                Moves = CreateHeroMovesForFirstLevel()
+                HeroClassType = heroClassType,
+                Stats = statsGenerator(),
+                Moves = _GetInitialMovesForClass(heroClassType),
+                CreatedAt = DateTime.UtcNow
             };
-
-        private List<IMove> CreateHeroMovesForFirstLevel() => heroClass.InitialMoves != null ? heroClass.InitialMoves.Select(m => m).ToList() : [];
-
-        protected abstract IHeroStats CreateHeroStatsForFirstLevel();
-    }
-
-    public interface IWarriorHeroFactory : ICommonHeroFactory;
-
-    public class WarriorHeroFactory : CommonHeroFactory, IWarriorHeroFactory
-    {
-        public WarriorHeroFactory(IWarriorHeroClass warriorHeroClass) : base(warriorHeroClass)
-        {
         }
+        
+        #region Stats Generators
 
-        protected override IHeroStats CreateHeroStatsForFirstLevel()
+        private HeroStats _GenerateWarriorStats()
         {
             var rand = new Random();
             return new HeroStats
             {
                 Level = 1,
-                LifePoints = BarPoints.CreateFullBarPoints(rand.Next(3)+8),
+                LifePoints = BarPoints.CreateFullBarPoints(rand.Next(3) + 8),
                 MoralityPoints = BarPoints.CreateFullBarPoints(rand.Next(3) + 10),
                 Physic = rand.Next(3) + 3,
                 Mind = rand.Next(2),
@@ -108,19 +62,8 @@ namespace Domain.Entities.Factories
                 Charisma = rand.Next(5) + 1,
             };
         }
-    }
 
-    public interface IWizardHeroFactory : ICommonHeroFactory;
-
-    public class WizardHeroFactory : CommonHeroFactory, IWizardHeroFactory
-    {
-
-        public WizardHeroFactory(IWizardHeroClass wizardHeroClass) : base(wizardHeroClass)
-        {
-        }
-
-
-        protected override IHeroStats CreateHeroStatsForFirstLevel()
+        private HeroStats _GenerateWizardStats()
         {
             var rand = new Random();
             return new HeroStats
@@ -135,17 +78,8 @@ namespace Domain.Entities.Factories
                 Charisma = rand.Next(5) + 1,
             };
         }
-    }
 
-    public interface IClericHeroFactory : ICommonHeroFactory;
-
-    public class ClericHeroFactory : CommonHeroFactory, IClericHeroFactory
-    {
-        public ClericHeroFactory(IClericHeroClass clericHeroClass) : base(clericHeroClass)
-        {
-        }
-
-        protected override IHeroStats CreateHeroStatsForFirstLevel()
+        private HeroStats _GenerateClericStats()
         {
             var rand = new Random();
             return new HeroStats
@@ -160,54 +94,135 @@ namespace Domain.Entities.Factories
                 Charisma = rand.Next(5) + 1,
             };
         }
-    }
 
-    public interface IScoundrelHeroFactory : ICommonHeroFactory;
-
-    public class ScoundrelHeroFactory : CommonHeroFactory, IScoundrelHeroFactory
-    {
-        public ScoundrelHeroFactory(IScoundrelHeroClass heroClass) : base(heroClass)
-        {
-        }
-
-        protected override IHeroStats CreateHeroStatsForFirstLevel()
+        private HeroStats _GenerateScoundrelStats()
         {
             var rand = new Random();
             return new HeroStats
             {
                 Level = 1,
-                LifePoints = BarPoints.CreateFullBarPoints(rand.Next(1)),
-                MoralityPoints = BarPoints.CreateFullBarPoints(rand.Next(1)),
-                Physic = rand.Next(1),
-                Mind = rand.Next(1) ,
-                Faith = rand.Next(1) ,
-                Speed = rand.Next(1) ,
-                Charisma = rand.Next(1),
+                LifePoints = BarPoints.CreateFullBarPoints(rand.Next(3) + 5),
+                MoralityPoints = BarPoints.CreateFullBarPoints(rand.Next(3) + 8),
+                Physic = rand.Next(2) + 2,
+                Mind = rand.Next(3) + 1,
+                Faith = rand.Next(2),
+                Speed = rand.Next(3) + 3,
+                Charisma = rand.Next(4) + 2,
             };
         }
-    }
 
-    public interface IGuardianHeroFactory : ICommonHeroFactory;
-
-    public class GuardianHeroFactory : CommonHeroFactory, IGuardianHeroFactory
-    {
-        public GuardianHeroFactory(IGuardianHeroClass heroClass) : base(heroClass)
-        {
-        }
-
-        protected override IHeroStats CreateHeroStatsForFirstLevel()
+        private HeroStats _GenerateGuardianStats()
         {
             var rand = new Random();
             return new HeroStats
             {
                 Level = 1,
-                LifePoints = BarPoints.CreateFullBarPoints(rand.Next(1)),
-                MoralityPoints = BarPoints.CreateFullBarPoints(rand.Next(1)),
-                Physic = rand.Next(1),
-                Mind = rand.Next(1),
-                Faith = rand.Next(1),
-                Speed = rand.Next(1),
-                Charisma = rand.Next(1),
+                LifePoints = BarPoints.CreateFullBarPoints(rand.Next(4) + 10),
+                MoralityPoints = BarPoints.CreateFullBarPoints(rand.Next(3) + 8),
+                Physic = rand.Next(3) + 2,
+                Mind = rand.Next(2) + 1,
+                Faith = rand.Next(3) + 2,
+                Speed = rand.Next(2) + 1,
+                Charisma = rand.Next(4) + 1,
+            };
+        }
+
+        #endregion
+
+        private List<Move> _GetInitialMovesForClass(HeroClassType heroClassTypeType)
+        {
+            return heroClassTypeType switch
+            {
+                HeroClassType.Warrior => new List<Move>
+                {
+                    new Move
+                    {
+                        Name = "Slash",
+                        MoveType = MoveType.Simple,
+                        StatToHit = HeroStatsEnumeration.Physic,
+                        NumberTargets = 1,
+                        Strategies = [_moveStrategyFactory.CreateAttackStrategy("Slash damage", minDamage: 2, maxDamage: 5)]
+                    },
+                    new Move
+                    {
+                        Name = "Super slash",
+                        MoveType = MoveType.Simple,
+                        StatToHit = HeroStatsEnumeration.Physic,
+                        NumberTargets = 1,
+                        Strategies = [_moveStrategyFactory.CreateAttackStrategy("Slash damage", minDamage: 3, maxDamage: 9)]
+                    }
+                },
+
+                HeroClassType.Wizard => new List<Move>
+                {
+                    new Move { 
+                        Name = "Fireball",
+                        MoveType = MoveType.Simple,
+                        StatToHit = HeroStatsEnumeration.Mind,
+                        NumberTargets = 1,
+                        Strategies = [_moveStrategyFactory.CreateAttackStrategy("Fire Damage", minDamage: 2, maxDamage: 10)]
+                    },
+                    new Move
+                    {
+                        Name = "Magic Missile",
+                        MoveType = MoveType.Simple,
+                        StatToHit = HeroStatsEnumeration.Mind,
+                        NumberTargets = 1,
+                        Strategies = [_moveStrategyFactory.CreateAttackStrategy("True Damage", minDamage: 3, maxDamage: 17)]
+                    }
+                },
+
+                HeroClassType.Cleric => new List<Move>
+                {
+                    new Move
+                    {
+                        Name = "Heal",
+                        MoveType = MoveType.Area,
+                        Strategies = [
+                            _moveStrategyFactory.CreateHealStrategy("Heal Life", statToHeal: HeroStatsEnumeration.LifePoints, minValue: 1, maxValue: 10)]
+                    },
+                    new Move
+                    {
+                        Name = "Smite",
+                        MoveType = MoveType.Simple,
+                        StatToHit = HeroStatsEnumeration.Faith,
+                        NumberTargets = 1,
+                        Strategies = [_moveStrategyFactory.CreateAttackStrategy("True damage", fixedDamage: 6)]
+                    }
+                },
+
+                HeroClassType.Scoundrel => new List<Move>
+                {
+                    new Move
+                    {
+                        Name = "Backstab",
+                        MoveType = MoveType.Simple,
+                        StatToHit = HeroStatsEnumeration.Speed,
+                        NumberTargets = 1,
+                        Strategies = [_moveStrategyFactory.CreateAttackStrategy("True damage", minDamage: 3, maxDamage: 12)]
+                    },
+                    new Move
+                    {
+                        Name = "Poison Dart",
+                        MoveType = MoveType.Simple,
+                        StatToHit = HeroStatsEnumeration.Speed,
+                        NumberTargets = 1,
+                        Strategies = [_moveStrategyFactory.CreateAttackStrategy("Poison damage", minDamage: 2, maxDamage: 8)]
+                    }
+                },
+
+                HeroClassType.Guardian => new List<Move>
+                {
+                    new Move
+                    {
+                        Name = "Taunt",
+                        MoveType = MoveType.Simple,
+                        Strategies = [_moveStrategyFactory.CreateBuffStrategy("Taunt debuff", HeroStatsEnumeration.Defence, buffValue: 2, numberOfRounds: 3)]
+                    },
+                    new Move {Name = "Counter"}
+                },
+
+                _ => new List<Move>()
             };
         }
     }

@@ -1,22 +1,60 @@
-﻿using Domain.Entities;
-using Tomacco.Source.Entities;
+﻿using Domain.Models;
 
 namespace Domain.Factories
 {
     public interface ICityFactory
     {
-        public ICity Create(int id, string name, IFamilyOfPlayer[] families, ISlotCityBuilding[] slotCityBuildings);
+        City CreateCity(string gameCode, int numberOfSlots = 12);
     }
+
     public class CityFactory : ICityFactory
     {
-        public ICity Create(int id, string name, IFamilyOfPlayer[] families, ISlotCityBuilding[] slotCityBuildings)
+        private static readonly string[] CityNames =
         {
-            return new City
+            "Valdoria", "Crystalheim", "Ironforge", "Silvermoon", "Stormwind",
+            "Ravenholdt", "Goldshire", "Moonbrook", "Lakeshire", "Darkshire",
+            "Westfall", "Redridge", "Duskwood", "Elwynn", "Northshire"
+        };
+
+        private static readonly string[] SlotNames =
+        {
+            "Piazza Centrale", "Quartiere Nord", "Quartiere Sud", "Quartiere Est",
+            "Quartiere Ovest", "Porto", "Collina del Castello", "Mercato Vecchio",
+            "Via dei Mercanti", "Giardini Reali", "Distretto Artigiano", "Zona Mineraria",
+            "Bosco Sacro", "Riva del Fiume", "Torre di Guardia", "Antico Tempio"
+        };
+
+        private readonly Random _random = new();
+
+        public City CreateCity(string gameCode, int numberOfSlots = 12)
+        {
+            var cityName = CityNames[_random.Next(CityNames.Length)];
+
+            var city = new City
             {
-                Id = id,
-                FamilyOfPlayers = families.Select(x => x).ToList(),
-                SlotCityBuildings = (ISlotCityBuilding[]) slotCityBuildings.Clone()
+                Name = cityName,
+                Description = $"La gloriosa città di {cityName}",
+                GameCode = gameCode,
+                MaxSlots = numberOfSlots,
+                Slots = new List<SlotBuilding>()
             };
+
+            // Crea gli slot vuoti
+            for (int i = 0; i < numberOfSlots; i++)
+            {
+                var slotName = i < SlotNames.Length
+                    ? SlotNames[i]
+                    : $"Zona {i + 1}";
+
+                city.Slots.Add(new SlotBuilding
+                {
+                    Name = slotName,
+                    Position = i + 1,
+                    City = city
+                });
+            }
+
+            return city;
         }
     }
 }
